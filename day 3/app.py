@@ -1,64 +1,77 @@
+"""Day 2 — the API now has a database: it remembers every calculation and serves two months of substation readings.
+First:  python 02_load_readings.py
+Run:    uvicorn app:app --reload        → http://127.0.0.1:8000/docs"""
+from datetime import date, datetime
+from typing import Literal
 
-import streamlit as st
+from fastapi import FastAPI, HTTPException, Query
 
-st.set_page_config(
-    page_title="Campus Energy Monitoring",
-    page_icon="⚡",
-    layout="wide"
-)
+import appliance
+import ee
+import queries
 
-st.title("⚡ Campus Energy Monitoring System")
-st.write("Monitor electricity usage and calculate estimated energy costs.")
+app = FastAPI(title="Campus Energy API", version="day-3")
 
-st.sidebar.header("Energy Details")
 
-building = st.sidebar.selectbox(
-    "Select Building",
-    ["Engineering Block", "Library", "Computer Lab", "Hostel"]
-)
+@app.get("/")
+def home():
+    return {"message": "Campus Energy API is running. Open /docs to try it."}
 
-units = st.sidebar.number_input(
-    "Electricity Consumed (kWh)",
-    min_value=0.0,
-    value=500.0,
-    step=50.0
-)
 
-rate = st.sidebar.number_input(
-    "Cost per Unit (₹)",
-    min_value=0.0,
-    value=8.0,
-    step=0.5
-)
+@app.get("/calculate")
+def calculate(a: float, b: float, op: Literal["add", "sub", "mul", "div"]):
+    try:
+        result = {"result": ee.calculate(a, b, op)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    queries.save_calculation("calculate", {"a": a, "b": b, "op": op}, result)
+    return result
 
-bill = units * rate
 
-st.subheader(f"Energy Report: {building}")
+@app.get("/energy-cost")
+def energy_cost(watts: float = Query(gt=0, le=50000, description="appliance power in watts"),
+                hours: float = Query(gt=0, le=24, description="hours of use in a day"),
+                rate: float = Query(8.0, gt=0, le=50, description="₹ per unit (kWh)")):
+    result = ee.energy_cost(watts, hours, rate)
+    queries.save_calculation("energy-cost", {"watts": watts, "hours": hours, "rate": rate}, result)   # NEW: remember it
+    return result
 
-col1, col2, col3 = st.columns(3)
 
-col1.metric("Energy Consumption", f"{units:,.0f} kWh")
-col2.metric("Cost per Unit", f"₹{rate:,.2f}")
-col3.metric("Estimated Electricity Bill", f"₹{bill:,.2f}")
+@app.get("/bill")
+def bill(units: float = Query(ge=0, le=100000, description="units (kWh) used in the month")):
+    result = ee.monthly_bill(units)
+    queries.save_calculation("bill", {"units": units}, {"bill_rs": result["bill_rs"]})
+    return result
 
-st.divider()
 
-st.subheader("Sample Building Consumption")
+# ── Monday's appliance list (GET, POST, PUT, DELETE) lives in appliance.py ────────────────────────────
+app.include_router(appliance.router)
 
-energy_data = {
-    "Building": [
-        "Engineering Block",
-        "Library",
-        "Computer Lab",
-        "Hostel"
-    ],
-    "Consumption (kWh)": [650, 350, 500, 800]
-}
 
-st.bar_chart(
-    energy_data,
-    x="Building",
-    y="Consumption (kWh)"
-)
+@app.get("/history")
+def history(limit: int = Query(10, ge=1, le=100)):
+    """The most recent calculations, newest first."""
+    return queries.history(limit)
 
-st.caption("Day 3 Assignment | Streamlit App Deployment")
+
+@app.get("/readings")
+def readings(start: datetime, end: datetime):
+    """Substation readings between two times, e.g. start=2026-03-23T00:00&end=2026-03-24T00:00"""
+    if end <= start:
+        raise HTTPException(status_code=400, detail="end must be after start")
+    return queries.readings(start, end)
+
+
+@app.get("/summary")
+def summary(day: date):
+    """One day in numbers: peak load, energy, solar and the transformer's peak loading."""
+    try:
+        return queries.summary(day)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/peak-days")
+def peak_days(top: int = Query(5, ge=1, le=20)):
+    """Days when the transformer worked hardest."""
+    return queries.peak_days(top)
