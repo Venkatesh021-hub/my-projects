@@ -1,0 +1,8 @@
+LOCATION,LATITUDE,LONGITUDE,FUNCTION
+Hydro Power Generation House,16.09016063,78.90333433,Generation
+Srisailam Electrical Substation,16.08068939,78.90506363,Power evacuation
+TGTRANSCO Mamidipally,17.23441904,78.48160729,Transmission
+TGTRANSCO Shankarpally,17.45537483,78.14843119,Transmission
+TGSPDCL Maheshwaram,17.13734056,78.43650507,Distribution
+33/11 kV Substation,17.39977329,78.38338169,Distribution
+MGIT,17.39125575,78.32214284,Load
