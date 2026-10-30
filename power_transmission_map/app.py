@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from geopy.distance import geodesic
 from streamlit_folium import st_folium
+from pathlib import Path
 
 
 # ---------------- PAGE CONFIG ----------------
@@ -33,24 +34,28 @@ st.info(
 @st.cache_data
 def load_data():
 
-    df = pd.read_csv("power_TR.csv")
+    csv_path = Path(__file__).resolve().parent / "power_TR.csv"
 
-    df.columns = df.columns.str.strip().str.upper()
+    try:
+        df = pd.read_csv(csv_path)
 
-    df["LATITUDE"] = pd.to_numeric(
-        df["LATITUDE"], errors="coerce"
-    )
+        df.columns = df.columns.str.strip().str.upper()
 
-    df["LONGITUDE"] = pd.to_numeric(
-        df["LONGITUDE"], errors="coerce"
-    )
+        df["LATITUDE"] = pd.to_numeric(
+            df["LATITUDE"], errors="coerce"
+        )
 
-    df = df.dropna(
-        subset=["LATITUDE", "LONGITUDE"]
-    )
+        df["LONGITUDE"] = pd.to_numeric(
+            df["LONGITUDE"], errors="coerce"
+        )
 
-    return df
+        df = df.dropna(subset=["LATITUDE", "LONGITUDE"])
 
+        return df
+
+    except Exception as e:
+        st.error(f"Unable to load CSV: {e}")
+        return pd.DataFrame()
 
 try:
     df = load_data()
